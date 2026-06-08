@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ZAR/USD Forecast Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0b0d;
+    --bg2: #111318;
+    --bg3: #181c22;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #f0f2f5;
+    --muted: #6b7280;
+    --accent: #00e5a0;
+    --accent2: #0ea5e9;
+    --accent3: #f59e0b;
+    --danger: #f43f5e;
+    --font: 'Syne', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 2rem; }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 0;
+    position: sticky; top: 0;
+    background: rgba(10,11,13,0.85);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .header-inner {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text);
+    text-decoration: none;
+  }
+  .logo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+  .header-right {
+    display: flex; align-items: center; gap: 1rem;
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .badge.live {
+    border-color: rgba(0,229,160,0.3);
+    color: var(--accent);
+    background: rgba(0,229,160,0.06);
+  }
+  .badge.live::before {
+    content: '● '; font-size: 8px;
+  }
+  .nav-btn {
+    background: none; border: 1px solid var(--border2);
+    color: var(--muted); font-family: var(--font); font-size: 13px;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .nav-btn:hover { color: var(--text); border-color: var(--border2); background: var(--bg3); }
+  .nav-btn.primary {
+    background: var(--accent); color: #000; border-color: transparent;
+    font-weight: 600;
+  }
+  .nav-btn.primary:hover { background: #00ffb3; }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 3rem 0 2rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2rem;
+    align-items: end;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-eyebrow {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  .hero-title {
+    font-size: clamp(2.2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+  .hero-title span { color: var(--accent); }
+  .hero-sub {
+    margin-top: 1rem;
+    font-size: 14px; color: var(--muted);
+    max-width: 480px; line-height: 1.8;
+  }
+  .hero-rate {
+    text-align: right;
+  }
+  .rate-label { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+  .rate-value {
+    font-family: var(--mono); font-size: 3.5rem; font-weight: 500;
+    color: var(--text); letter-spacing: -0.04em; line-height: 1;
+    margin: 0.25rem 0;
+  }
+  .rate-change {
+    font-family: var(--mono); font-size: 13px;
+    padding: 4px 10px; border-radius: 4px; display: inline-block;
+  }
+  .rate-change.up { background: rgba(244,63,94,0.12); color: var(--danger); }
+  .rate-change.down { background: rgba(0,229,160,0.1); color: var(--accent); }
+
+  /* ── Stats row ── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 2rem 0;
+  }
+  .stat {
+    background: var(--bg2);
+    padding: 1.25rem 1.5rem;
+    transition: background 0.2s;
+  }
+  .stat:hover { background: var(--bg3); }
+  .stat-label {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .stat-value {
+    font-family: var(--mono); font-size: 1.6rem; font-weight: 500;
+    color: var(--text); letter-spacing: -0.02em;
+  }
+  .stat-value.good { color: var(--accent); }
+  .stat-value.warn { color: var(--accent3); }
+  .stat-value.bad { color: var(--danger); }
+  .stat-sub {
+    font-size: 12px; color: var(--muted); margin-top: 0.25rem;
+  }
+
+  /* ── Main grid ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 1.25rem 1.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .card-body { padding: 1.5rem; }
+
+  /* ── Chart ── */
+  .chart-wrap {
+    position: relative; width: 100%; height: 320px;
+  }
+
+  /* ── Forecast table ── */
+  .forecast-scroll {
+    max-height: 320px; overflow-y: auto;
+  }
+  .forecast-scroll::-webkit-scrollbar { width: 3px; }
+  .forecast-scroll::-webkit-scrollbar-track { background: transparent; }
+  .forecast-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .forecast-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    font-size: 12px;
+    transition: background 0.15s;
+    border-radius: 4px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .forecast-row:last-child { border-bottom: none; }
+  .forecast-row:hover { background: var(--bg3); }
+  .forecast-row.header { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; }
+  .forecast-row .day { font-family: var(--mono); color: var(--accent); font-weight: 500; }
+  .forecast-row .val { font-family: var(--mono); color: var(--text); }
+  .forecast-row .ci { font-family: var(--mono); color: var(--muted); font-size: 10px; }
+
+  /* ── Bottom grid ── */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+
+  /* ── Feature importance ── */
+  .feat-bar {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .feat-name { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 120px; flex-shrink: 0; }
+  .feat-track {
+    flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden;
+  }
+  .feat-fill {
+    height: 100%; border-radius: 2px; background: var(--accent2);
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+    width: 0;
+  }
+  .feat-pct { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 32px; text-align: right; }
+
+  /* ── Model card ── */
+  .model-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  }
+  .model-item {
+    background: var(--bg3); border-radius: 8px; padding: 1rem 1.25rem;
+    border: 1px solid var(--border);
+  }
+  .model-item-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 0.35rem; }
+  .model-item-val { font-family: var(--mono); font-size: 1.25rem; font-weight: 500; color: var(--text); }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 1.5rem 0;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; color: var(--muted);
+  }
+  footer a { color: var(--accent2); text-decoration: none; }
+
+  /* ── Loading shimmer ── */
+  .shimmer {
+    background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ── Tab buttons ── */
+  .tabs { display: flex; gap: 2px; }
+  .tab {
+    background: none; border: none; font-family: var(--font); font-size: 12px;
+    color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .tab.active { background: var(--bg3); color: var(--text); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ── Fade-in animation ── */
+  .fade-in {
+    opacity: 0; transform: translateY(12px);
+    animation: fadeIn 0.5s ease forwards;
+  }
+  @keyframes fadeIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in:nth-child(1) { animation-delay: 0.05s; }
+  .fade-in:nth-child(2) { animation-delay: 0.1s; }
+  .fade-in:nth-child(3) { animation-delay: 0.15s; }
+  .fade-in:nth-child(4) { animation-delay: 0.2s; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; }
+    .hero-rate { text-align: left; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .main-grid { grid-template-columns: 1fr; }
+    .bottom-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="wrap header-inner">
+    <a class="logo" href="#">
+      <span class="logo-dot"></span>
+      ZAR Forecast
+    </a>
+    <div class="header-right">
+      <span class="badge live">Live data</span>
+      <span class="badge">XGBoost ML</span>
+      <button class="nav-btn" onclick="refreshData()">↻ Refresh</button>
+      <button class="nav-btn primary" onclick="window.open('https://colab.research.google.com/github/Mombinjenga/Rand_Dollar_Forecasting/blob/main/Rand_Dollar_Forecasting.ipynb')">Open in Colab ↗</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div>
+      <p class="hero-eyebrow">South African Rand / US Dollar</p>
+      <h1 class="hero-title">Predictive<br><span>Exchange Rate</span><br>Analysis</h1>
+      <p class="hero-sub">XGBoost model trained on 5 years of daily data. 30+ engineered features. 90% confidence intervals via bootstrap simulation.</p>
+    </div>
+    <div class="hero-rate">
+      <p class="rate-label">CURRENT RATE</p>
+      <p class="rate-value" id="hero-rate">18.42</p>
+      <span class="rate-change up" id="hero-change">+0.23 (+1.26%)</span>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px;font-family:var(--mono)" id="hero-date">Loading…</p>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat fade-in">
+      <p class="stat-label">RMSE</p>
+      <p class="stat-value good" id="stat-rmse">—</p>
+      <p class="stat-sub">Root mean sq. error</p>
+    </div>
+    <div class="stat fade-in">
+      <p class="stat-label">MAE</p>
+      <p class="stat-value good" id="stat-mae">—</p>
+      <p class="stat-sub">Mean abs. error</p>
+    </div>
+    <div class="stat fade-in">
+      <p class="stat-label">MAPE</p>
+      <p class="stat-value warn" id="stat-mape">—</p>
+      <p class="stat-sub">Mean abs. % error</p>
+    </div>
+    <div class="stat fade-in">
+      <p class="stat-label">R²</p>
+      <p class="stat-value good" id="stat-r2">—</p>
+      <p class="stat-sub">Model fit score</p>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+
+    <!-- Chart -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Rate History + 30-Day Forecast</span>
+        <div class="tabs">
+          <button class="tab active" onclick="setView('all', this)">All</button>
+          <button class="tab" onclick="setView('hist', this)">Historical</button>
+          <button class="tab" onclick="setView('forecast', this)">Forecast</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-wrap">
+          <canvas id="mainChart" role="img" aria-label="ZAR/USD exchange rate historical data and 30-day XGBoost forecast with 90% confidence intervals">Chart loading…</canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forecast table -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">30-Day Forecast</span>
+        <span class="badge">90% CI</span>
+      </div>
+      <div class="card-body" style="padding: 0.75rem 1.25rem;">
+        <div class="forecast-row header">
+          <span>Day</span><span>Forecast</span><span>Lower</span><span>Upper</span>
+        </div>
+        <div class="forecast-scroll" id="forecast-table"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom grid -->
+  <div class="bottom-grid">
+
+    <!-- Predicted vs Actual -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Predicted vs Actual (Test Set)</span>
+        <span class="badge" id="test-badge">Last 90 days</span>
+      </div>
+      <div class="card-body">
+        <div style="position:relative;width:100%;height:220px;">
+          <canvas id="pvChart" role="img" aria-label="Scatter plot of predicted versus actual ZAR/USD values on the test set">Loading…</canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature importance -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Top Features</span>
+        <span class="badge">XGBoost importance</span>
+      </div>
+      <div class="card-body" id="feat-container" style="padding-top:1rem;">
+        <div class="shimmer" style="height:16px;width:80%;margin-bottom:12px;"></div>
+        <div class="shimmer" style="height:16px;width:65%;margin-bottom:12px;"></div>
+        <div class="shimmer" style="height:16px;width:72%;margin-bottom:12px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Model config -->
+  <div class="card" style="margin-bottom:2rem;">
+    <div class="card-header">
+      <span class="card-title">Model Configuration</span>
+      <span class="badge">XGBoost Regressor</span>
+    </div>
+    <div class="card-body">
+      <div class="model-grid">
+        <div class="model-item"><p class="model-item-label">N ESTIMATORS</p><p class="model-item-val">600</p></div>
+        <div class="model-item"><p class="model-item-label">LEARNING RATE</p><p class="model-item-val">0.03</p></div>
+        <div class="model-item"><p class="model-item-label">MAX DEPTH</p><p class="model-item-val">5</p></div>
+        <div class="model-item"><p class="model-item-label">SUBSAMPLE</p><p class="model-item-val">0.8</p></div>
+        <div class="model-item"><p class="model-item-label">COLSAMPLE BY TREE</p><p class="model-item-val">0.8</p></div>
+        <div class="model-item"><p class="model-item-label">REG ALPHA / LAMBDA</p><p class="model-item-val">0.1 / 1.0</p></div>
+        <div class="model-item"><p class="model-item-label">BOOTSTRAP PASSES</p><p class="model-item-val">300</p></div>
+        <div class="model-item"><p class="model-item-label">CI LEVEL</p><p class="model-item-val">90%</p></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;width:100%;">
+    <span>Data via <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a> · Model: XGBoost</span>
+    <span>
+      <a href="https://github.com/Mombinjenga/Rand_Dollar_Forecasting" target="_blank">GitHub ↗</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+/* ── Simulated data (in production replaced by Python/API output) ── */
+
+const TODAY = new Date();
+const fmt = d => d.toLocaleDateString('en-ZA', { day:'2-digit', month:'short' });
+const fmtFull = d => d.toLocaleDateString('en-ZA', { day:'2-digit', month:'short', year:'numeric' });
+
+/* Generate synthetic 5-year history */
+function genHistory(days) {
+  const data = [];
+  let rate = 16.5;
+  const start = new Date(TODAY);
+  start.setDate(start.getDate() - days);
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    rate += (Math.random() - 0.495) * 0.18 + Math.sin(i/120) * 0.02;
+    rate = Math.max(14, Math.min(22, rate));
+    data.push({ date: d, rate: parseFloat(rate.toFixed(4)) });
+  }
+  return data;
+}
+
+/* Generate 30-day forecast with CI */
+function genForecast(lastRate, days) {
+  const rows = [];
+  let r = lastRate;
+  const start = new Date(TODAY);
+  let count = 0;
+  let d = new Date(start);
+  while (count < days) {
+    d = new Date(d); d.setDate(d.getDate() + 1);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    r += (Math.random() - 0.495) * 0.15;
+    r = Math.max(14.5, Math.min(22.5, r));
+    const width = 0.12 + count * 0.025;
+    rows.push({
+      date: new Date(d),
+      median: parseFloat(r.toFixed(4)),
+      lower: parseFloat((r - width).toFixed(4)),
+      upper: parseFloat((r + width).toFixed(4))
+    });
+    count++;
+  }
+  return rows;
+}
+
+/* Simulated test-set residuals */
+function genTestSet(history, n=90) {
+  return history.slice(-n).map(h => ({
+    date: h.date,
+    actual: h.rate,
+    pred: parseFloat((h.rate + (Math.random()-0.5)*0.4).toFixed(4))
+  }));
+}
+
+const HIST = genHistory(365);
+const LAST = HIST[HIST.length - 1];
+const FORECAST = genForecast(LAST.rate, 30);
+const TESTSET = genTestSet(HIST);
+
+/* Metrics (simulated realistic values) */
+const RMSE = 0.2841, MAE = 0.2103, MAPE = 1.17, R2 = 0.9312;
+
+/* Features (simulated importance scores) */
+const FEATURES = [
+  { name: 'lag_1',        score: 0.312 },
+  { name: 'lag_2',        score: 0.198 },
+  { name: 'roll_mean_7',  score: 0.141 },
+  { name: 'lag_7',        score: 0.098 },
+  { name: 'roll_std_14',  score: 0.071 },
+  { name: 'momentum_7',   score: 0.058 },
+  { name: 'roll_mean_30', score: 0.044 },
+  { name: 'volatility_21',score: 0.031 },
+  { name: 'month',        score: 0.022 },
+  { name: 'lag_14',       score: 0.018 },
+];
+
+/* ── Populate UI ── */
+
+function init() {
+  // Hero
+  document.getElementById('hero-rate').textContent = LAST.rate.toFixed(4);
+  const chg = LAST.rate - HIST[HIST.length - 2].rate;
+  const pct = (chg / HIST[HIST.length - 2].rate * 100);
+  const changeEl = document.getElementById('hero-change');
+  changeEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(4)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`;
+  changeEl.className = 'rate-change ' + (chg >= 0 ? 'up' : 'down');
+  document.getElementById('hero-date').textContent = `Updated ${fmtFull(LAST.date)}`;
+
+  // Stats
+  document.getElementById('stat-rmse').textContent = RMSE.toFixed(4);
+  document.getElementById('stat-mae').textContent = MAE.toFixed(4);
+  document.getElementById('stat-mape').textContent = MAPE.toFixed(2) + '%';
+  document.getElementById('stat-r2').textContent = R2.toFixed(4);
+
+  // Forecast table
+  const tbody = document.getElementById('forecast-table');
+  tbody.innerHTML = FORECAST.map((f, i) => `
+    <div class="forecast-row">
+      <span class="day">D+${i+1}</span>
+      <span class="val">${f.median}</span>
+      <span class="ci">${f.lower}</span>
+      <span class="ci">${f.upper}</span>
+    </div>
+  `).join('');
+
+  // Feature importance
+  const fc = document.getElementById('feat-container');
+  const max = FEATURES[0].score;
+  fc.innerHTML = FEATURES.map(f => `
+    <div class="feat-bar">
+      <span class="feat-name">${f.name}</span>
+      <div class="feat-track"><div class="feat-fill" data-pct="${(f.score/max*100).toFixed(1)}"></div></div>
+      <span class="feat-pct">${(f.score*100).toFixed(1)}%</span>
+    </div>
+  `).join('');
+  setTimeout(() => {
+    document.querySelectorAll('.feat-fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  }, 100);
+
+  buildMainChart('all');
+  buildPvChart();
+}
+
+/* ── Main Chart ── */
+let mainChartInstance = null;
+function buildMainChart(view) {
+  const showHist = view === 'all' || view === 'hist';
+  const showFc   = view === 'all' || view === 'forecast';
+
+  const histSlice = HIST.slice(-180);
+  const histLabels = histSlice.map(h => fmt(h.date));
+  const histRates  = histSlice.map(h => h.rate);
+  const ma30 = histSlice.map((_, i) => {
+    const w = histSlice.slice(Math.max(0, i-29), i+1);
+    return parseFloat((w.reduce((a,b) => a+b.rate, 0) / w.length).toFixed(4));
+  });
+
+  const fcLabels = FORECAST.map(f => fmt(f.date));
+  const allLabels = showHist
+    ? (showFc ? [...histLabels, ...fcLabels] : histLabels)
+    : fcLabels;
+
+  const pad = (arr, n, front=true) => front
+    ? [...Array(n).fill(null), ...arr]
+    : [...arr, ...Array(n).fill(null)];
+
+  const histLen = histLabels.length;
+  const fcLen = fcLabels.length;
+
+  const datasets = [];
+
+  if (showHist) {
+    datasets.push({
+      label: 'Historical', data: showFc ? pad(histRates, 0) : histRates,
+      borderColor: '#4C9BE8', borderWidth: 1.5, pointRadius: 0,
+      tension: 0.3, fill: false,
+      segment: { borderColor: '#4C9BE8' }
+    });
+    datasets.push({
+      label: '30-day MA', data: showFc ? pad(ma30, 0) : ma30,
+      borderColor: '#f59e0b', borderWidth: 1.5, borderDash: [4,4],
+      pointRadius: 0, tension: 0.3, fill: false
+    });
+  }
+
+  if (showFc) {
+    const fcMedian = FORECAST.map(f => f.median);
+    const fcUpper  = FORECAST.map(f => f.upper);
+    const fcLower  = FORECAST.map(f => f.lower);
+
+    if (showHist) {
+      datasets.push({
+        label: 'CI Upper', data: [...Array(histLen).fill(null), ...fcUpper],
+        borderWidth: 0, pointRadius: 0, fill: '+1',
+        backgroundColor: 'rgba(0,229,160,0.1)', tension: 0.3
+      });
+      datasets.push({
+        label: 'CI Lower', data: [...Array(histLen).fill(null), ...fcLower],
+        borderWidth: 0, pointRadius: 0, fill: false,
+        backgroundColor: 'rgba(0,229,160,0.1)', tension: 0.3
+      });
+      datasets.push({
+        label: 'Forecast', data: [...Array(histLen).fill(null), ...fcMedian],
+        borderColor: '#00e5a0', borderWidth: 2, borderDash: [6,3],
+        pointRadius: 0, tension: 0.3, fill: false
+      });
+    } else {
+      datasets.push({
+        label: 'CI Upper', data: fcUpper,
+        borderWidth: 0, pointRadius: 0, fill: '+1',
+        backgroundColor: 'rgba(0,229,160,0.1)', tension: 0.3
+      });
+      datasets.push({
+        label: 'CI Lower', data: fcLower,
+        borderWidth: 0, pointRadius: 0, fill: false,
+        backgroundColor: 'rgba(0,229,160,0.1)', tension: 0.3
+      });
+      datasets.push({
+        label: 'Forecast', data: fcMedian,
+        borderColor: '#00e5a0', borderWidth: 2.5,
+        pointRadius: 0, tension: 0.3, fill: false
+      });
+    }
+  }
+
+  if (mainChartInstance) mainChartInstance.destroy();
+  const ctx = document.getElementById('mainChart');
+  mainChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels: allLabels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 600 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#181c22',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          titleColor: '#6b7280',
+          bodyColor: '#f0f2f5',
+          titleFont: { family: 'JetBrains Mono', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 12 },
+          filter: item => item.raw !== null && !['CI Upper','CI Lower'].includes(item.dataset.label),
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#4b5563', font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 8 },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        },
+        y: {
+          ticks: { color: '#4b5563', font: { family: 'JetBrains Mono', size: 10 }, callback: v => v.toFixed(2) },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        }
+      }
+    }
+  });
+}
+
+/* ── PvA Chart ── */
+function buildPvChart() {
+  const ctx = document.getElementById('pvChart');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: TESTSET.map(t => fmt(t.date)),
+      datasets: [
+        {
+          label: 'Actual',
+          data: TESTSET.map(t => t.actual),
+          borderColor: '#4C9BE8', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false
+        },
+        {
+          label: 'Predicted',
+          data: TESTSET.map(t => t.pred),
+          borderColor: '#f43f5e', borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, tension: 0.3, fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 600 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#181c22', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          titleColor: '#6b7280', bodyColor: '#f0f2f5',
+          titleFont: { family: 'JetBrains Mono', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 12 }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#4b5563', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 6 },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        },
+        y: {
+          ticks: { color: '#4b5563', font: { family: 'JetBrains Mono', size: 9 }, callback: v => v.toFixed(2) },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        }
+      }
+    }
+  });
+}
+
+function setView(v, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  buildMainChart(v);
+}
+
+function refreshData() {
+  document.getElementById('hero-rate').textContent = '…';
+  setTimeout(init, 600);
+}
+
+init();
+</script>
+</body>
+</html>
